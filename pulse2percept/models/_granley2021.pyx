@@ -19,9 +19,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                     const float32[::1] streak_model_el,
                     const float32[::1] xel,
                     const float32[::1] yel,
-                    const float32[:, ::1] axon_segments,
-                    const uint32[::1] idx_start,
-                    const uint32[::1] idx_end,
+                    const float32[:, :, ::1] axon_segments,
                     float32 rho,
                     float32 thresh_percept,
                     int32 timesteps):
@@ -36,16 +34,10 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         Factors by which to scale brightness, rho (size), and lambda (streak length)
     xel, yel : 1D float32 array
         An array of x or y coordinates for each electrode (microns)
-    axon_segments : 2D float32 array
-        All axon segments concatenated into an Nx3 array.
+    axon_segments : 3D float32 array
+        All axon segments in an array with shape (n_points, axon_length, 3).
         Each row has the x/y coordinate of a segment along with its
         contribution to a given pixel.
-        ``idx_start`` and ``idx_end`` are used to slice the ``axon`` array.
-        For example, the axon belonging to the i-th pixel has segments
-        axon[idx_start[i]:idx_end[i]].
-        This arrangement is necessary in order to access ``axon`` in parallel.
-    idx_start, idx_end : 1D uint32 array
-        Start and stop indices of the i-th axon.
     rho : float32
         The rho parameter of the axon map model: exponential decay constant
         (microns) away from the axon.
@@ -64,7 +56,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     """
     cdef:
         int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
-        int32 n_el, n_time, n_space, n_ax, n_bright
+        int32 n_el, n_time, n_space, n_ax, n_bright, axon_length
         float32[::1] bright
         float32 px_bright, xdiff, ydiff, r2, amp, gauss_el, gauss_soma 
         float32 sgm_bright, bright_effect, size_effect, streak_effect
@@ -72,8 +64,9 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
 
     n_el = xel.shape[0]
     n_time = timesteps
-    n_space = len(idx_start)
+    n_space = len(axon_segments)
     n_bright = n_time * n_space
+    axon_length = len(axon_segments[0])
 
     # An array containing n_space entries
     bright = np.empty((n_space), dtype=np.float32)  # Py overhead
@@ -88,7 +81,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         # For example, the axon belonging to the neuron sitting at pixel
         # `idx_space` has segments
         # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
-        for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
+        for idx_ax in range(axon_length):
             # Calculate the activation of each axon segment by adding up
             # the contribution of each electrode:
             sgm_bright = 0.0
@@ -100,8 +93,8 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                 if c_abs(amp) > 0:
                     # Calculate the distance between this axon segment and
                     # the center of the stimulating electrode:
-                    xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
-                    ydiff = axon_segments[idx_ax, 1] - yel[idx_el]
+                    xdiff = axon_segments[idx_space, idx_ax, 0] - xel[idx_el]
+                    ydiff = axon_segments[idx_space, idx_ax, 1] - yel[idx_el]
                     r2 = xdiff * xdiff + ydiff * ydiff
                     # Determine the activation level of this axon segment,
                     # consisting of two things:
@@ -113,7 +106,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                     #   `build` and stored in `axon_segments[idx_ax, 2]`
                     #   precalculated value does not include streak model
                     #   effect, which must be added now
-                    gauss_soma = c_pow(axon_segments[idx_ax, 2], 1 / streak_effect)
+                    gauss_soma = c_pow(axon_segments[idx_space, idx_ax, 2], 1 / streak_effect)
                     sgm_bright = (sgm_bright +
                                     bright_effect * gauss_el * gauss_soma)
             # After summing up the currents from all the electrodes, we

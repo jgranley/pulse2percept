@@ -655,7 +655,7 @@ class AxonMapSpatial(SpatialModel):
             bundles = self.grow_axon_bundles()
             axons = self.find_closest_axon(bundles)
         # Calculate axon contributions (depends on axlambda):
-        axon_contrib = self.calc_axon_sensitivity(axons)
+        self.axon_contrib = self.calc_axon_sensitivity(axons).astype(np.float32)
         # Pickle axons along with all important parameters:
         params = {'loc_od': self.loc_od,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,

@@ -154,7 +154,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         each column independently.
     xel, yel : 1D float32 array
         An array of x or y coordinates for each electrode (microns)
-    axon_segments : 2D float32 array
+    axon_segments : 3D float32 array
         All axon segments in an array with shape (n_points, axon_length, 3).
         Each row has the x/y coordinate of a segment along with its
         contribution to a given pixel.
@@ -175,7 +175,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
-    n_space = len(idx_start)
+    n_space = len(axon_segments)
     n_bright = n_time * n_space
     axon_length = len(axon_segments[0])
 

@@ -184,8 +184,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                       np.array([earray[e].y for e in stim.electrodes],
                                             dtype=np.float32),
                                       self.axon_contrib,
-                                      self.axon_idx_start.astype(np.uint32),
-                                      self.axon_idx_end.astype(np.uint32),
                                       self.rho,
                                       self.thresh_percept,
                                       stim.shape[1])
