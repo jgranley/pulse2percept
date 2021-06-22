@@ -512,6 +512,10 @@ class AxonMapSpatial(SpatialModel):
         that the only work left to do during run time is to multiply the
         sensitivity value with the current applied to each segment.
 
+        The axon length is padded or truncated according to self.axon_length.
+        This method also maintains the number of axons (as opposed to ratio)
+        in self._axon_length
+
         Parameters
         ----------
         bundles : list of Nx2 arrays
@@ -521,9 +525,9 @@ class AxonMapSpatial(SpatialModel):
 
         Returns
         -------
-        axon_contrib : list of Nx3 arrays
-            A list of axon segments and sensitivity values. Each entry in the
-            list is a Nx3 array, where the first two columns contain the retinal
+        axon_contrib : numpy array with shape (n_points, self._axon_length, 3)
+            An array of axon segments and sensitivity values. Each entry in the
+            array is a Nx3 array, where the first two columns contain the retinal
             coordinates of each axon segment (microns), and the third column
             contains the sensitivity of the segment to electrical current.
             The latter depends on ``self.axlambda``.
@@ -552,7 +556,24 @@ class AxonMapSpatial(SpatialModel):
             idx_d2 = np.concatenate(([False], idx_d2))
             contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
-        return axon_contrib
+        
+        # truncate/pad to correct length
+        if self.axon_length >= 2:
+            self._axon_length = self.axon_length
+        else:
+            self._axon_length = int(float(self.axon_length) * max([len(axon) for axon in axon_contrib]))
+
+        axon_sensitivities = np.zeros((len(axon_contrib), self._axon_length, 3))
+        for i, axon in enumerate(axon_contrib):
+            original_len = len(axon)
+            if original_len >= self._axon_length:
+                axon_sensitivities[i] = axon[:self._axon_length]
+            else:
+                axon_sensitivities[i, :original_len] = axon
+                axon_sensitivities[i, original_len:] = axon[-1]
+
+        del axon_contrib
+        return axon_sensitivities
 
     def calc_bundle_tangent(self, xc, yc):
         """Calculates orientation of fiber bundle tangent at (xc, yc)
@@ -634,21 +655,14 @@ class AxonMapSpatial(SpatialModel):
             bundles = self.grow_axon_bundles()
             axons = self.find_closest_axon(bundles)
         # Calculate axon contributions (depends on axlambda):
-        # Axon contribution is a list of (differently shaped) NumPy arrays,
-        # and a list cannot be accessed in parallel without the gil. Instead
-        # we need to concatenate it into a really long Nx3 array, and pass the
-        # start and end indices of each slice:
         axon_contrib = self.calc_axon_sensitivity(axons)
-        self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
-        len_axons = [a.shape[0] for a in axon_contrib]
-        self.axon_idx_end = np.cumsum(len_axons)
-        self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
         # Pickle axons along with all important parameters:
         params = {'loc_od': self.loc_od,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,
                   'xrange': self.xrange, 'yrange': self.yrange,
                   'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
-                  'ax_segments_range': self.ax_segments_range}
+                  'ax_segments_range': self.ax_segments_range,
+                  'axon_length' : self._axon_length}
         pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
 
     def _predict_spatial(self, earray, stim):

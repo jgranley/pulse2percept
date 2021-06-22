@@ -141,9 +141,7 @@ cpdef fast_find_closest_axon(float32[:, :] flat_bundles,
 cpdef fast_axon_map(const float32[:, ::1] stim,
                     const float32[::1] xel,
                     const float32[::1] yel,
-                    const float32[:, ::1] axon_segments,
-                    const uint32[::1] idx_start,
-                    const uint32[::1] idx_end,
+                    const float32[:, :, ::1] axon_segments,
                     float32 rho,
                     float32 thresh_percept):
     """Fast spatial response of the axon map model
@@ -157,15 +155,9 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     xel, yel : 1D float32 array
         An array of x or y coordinates for each electrode (microns)
     axon_segments : 2D float32 array
-        All axon segments concatenated into an Nx3 array.
+        All axon segments in an array with shape (n_points, axon_length, 3).
         Each row has the x/y coordinate of a segment along with its
         contribution to a given pixel.
-        ``idx_start`` and ``idx_end`` are used to slice the ``axon`` array.
-        For example, the axon belonging to the i-th pixel has segments
-        axon[idx_start[i]:idx_end[i]].
-        This arrangement is necessary in order to access ``axon`` in parallel.
-    idx_start, idx_end : 1D uint32 array
-        Start and stop indices of the i-th axon.
     rho : float32
         The rho parameter of the axon map model: exponential decay constant
         (microns) away from the axon.
@@ -176,7 +168,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     """
     cdef:
         int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
-        int32 n_el, n_time, n_space, n_ax, n_bright
+        int32 n_el, n_time, n_space, n_ax, n_bright, axon_length
         float32[:, ::1] bright
         float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
         int32 i0, i1
@@ -185,6 +177,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     n_time = stim.shape[1]
     n_space = len(idx_start)
     n_bright = n_time * n_space
+    axon_length = len(axon_segments[0])
 
     # A flattened array containing n_space x n_time entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
@@ -197,12 +190,8 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
             # Find the brightness value of each pixel (`px_bright`) by finding
             # the strongest activated axon segment:
             px_bright = 0.0
-            # Slice `axon_contrib` (but don't assign the slice to a variable).
-            # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
-            # For example, the axon belonging to the neuron sitting at pixel
-            # `idx_space` has segments
-            # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
-            for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
+            # Loop over axon segments
+            for idx_ax in range(axon_length):
                 # Calculate the activation of each axon segment by adding up
                 # the contribution of each electrode:
                 sgm_bright = 0.0
@@ -211,8 +200,8 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                     if c_abs(amp) > 0:
                         # Calculate the distance between this axon segment and
                         # the center of the stimulating electrode:
-                        xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
-                        ydiff = axon_segments[idx_ax, 1] - yel[idx_el]
+                        xdiff = axon_segments[idx_space, idx_ax, 0] - xel[idx_el]
+                        ydiff = axon_segments[idx_space, idx_ax, 1] - yel[idx_el]
                         r2 = xdiff * xdiff + ydiff * ydiff
                         # Determine the activation level of this axon segment,
                         # consisting of two things:
@@ -223,7 +212,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                         #   body (depends on `axlambda`, precalculated during
                         #   `build` and stored in `axon_segments[idx_ax, 2]`:
                         sgm_bright = (sgm_bright +
-                                      gauss * axon_segments[idx_ax, 2] * amp)
+                                      gauss * axon_segments[idx_space, idx_ax, 2] * amp)
                 # After summing up the currents from all the electrodes, we
                 # compare the brightness of the segment (`sgm_bright`) to the
                 # previously brightest segment. The brightest segment overall
