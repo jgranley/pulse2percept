@@ -191,6 +191,14 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    axon_length: optional
+        Each axon segment is either padded or truncated to be this length. 
+        Options are an integer >= 2, denoting the number of axon segments, 
+        or a float in the range (0, 1], representing the proportion of the 
+        longest axon to use (e.g. a value of 0.5 truncates/pads all axons
+        to have floor(0.5*len(longest_axon))). Defaults to 1
+        TODO: Consider replacing atleast min_ax_sensitivity and/or 
+        n_axon_segments
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
@@ -206,8 +214,7 @@ class AxonMapSpatial(SpatialModel):
     def __init__(self, **params):
         super(AxonMapSpatial, self).__init__(**params)
         self.axon_contrib = None
-        self.axon_idx_start = None
-        self.axon_idx_end = None
+        self._axon_length = None # Length of axons
 
     def get_default_params(self):
         base_params = super(AxonMapSpatial, self).get_default_params()
@@ -228,6 +235,8 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
+            # Length of axon contrib segment for each simulated point
+            'axon_length': 1,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
