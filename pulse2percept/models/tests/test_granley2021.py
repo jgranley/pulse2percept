@@ -119,11 +119,11 @@ def test_biphasicAxonMapSpatial(engine):
     implant = ArgusII()
     implant.stim = Stimulus({'A4' : BiphasicPulseTrain(20, 1, 1)})
     percept = model.predict_percept(implant)
-    npt.assert_equal(np.sum(percept.data > 1), 82)
-    npt.assert_equal(np.sum(percept.data > 2), 59)
-    npt.assert_equal(np.sum(percept.data > 3), 44)
-    npt.assert_equal(np.sum(percept.data > 5), 25)
-    npt.assert_equal(np.sum(percept.data > 7), 14)
+    npt.assert_equal(np.sum(percept.data > 0.1), 85)
+    npt.assert_equal(np.sum(percept.data > 0.25), 51)
+    npt.assert_equal(np.sum(percept.data > 0.5), 28)
+    npt.assert_equal(np.sum(percept.data > 0.75), 14)
+    npt.assert_equal(np.sum(percept.data > 1), 4)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
