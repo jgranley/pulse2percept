@@ -230,8 +230,6 @@ class Stimulus(PrettyPrint):
                 self.metadata['electrodes'][str(_electrodes[0])] = {'metadata' : source.metadata, 'type' : type(source)}
             else:
                 self.metadata = source.metadata
-
-
         elif isinstance(source, np.ndarray):
             # A NumPy array is either 1-D (list of electrodes, time=None) or
             # 2-D (electrodes x time points):
@@ -246,6 +244,9 @@ class Stimulus(PrettyPrint):
             else:
                 raise ValueError("Cannot create Stimulus object from a %d-D "
                                  "NumPy array. Must be < 2-D." % source.ndim)
+            if len(self.metadata['electrodes']) != len(_electrodes):
+                for elec in _electrodes:
+                    self.metadata['electrodes'][str(elec)] = {'metadata' : '', 'type': np.ndarray}
         else:
             # Input is either a scalar or (more likely) a collection of source
             # types. Easiest to tream them all as a collection and iterate:

@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -10,6 +11,7 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
+from pulse2percept.utils import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
 
 
@@ -27,8 +29,12 @@ def test_ScoreboardSpatial():
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
     # Converting ret <=> dva
-    npt.assert_almost_equal(model.ret2dva(0), 0)
-    npt.assert_almost_equal(model.dva2ret(0), 0)
+    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
+    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    model2 = ScoreboardSpatial(retinotopy=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+                     True)
 
     implant = ArgusI(stim=np.zeros(16))
     # Zero in = zero out:
@@ -66,6 +72,13 @@ def test_ScoreboardModel():
     npt.assert_equal(model.rho, 987)
     npt.assert_equal(model.spatial.rho, 987)
 
+    # Converting ret <=> dva
+    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
+    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    model2 = ScoreboardModel(retinotopy=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+                     True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
@@ -106,7 +119,7 @@ def test_ScoreboardModel_predict_percept():
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept.data, 0.8, rtol=0.1, atol=0.1)),
-                     92)
+                     88)
 
     # Model gives same outcome as Spatial:
     spatial = ScoreboardSpatial(engine='serial', xystep=1, rho=100)
@@ -122,7 +135,7 @@ def test_ScoreboardModel_predict_percept():
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
     model = AxonMapSpatial(engine=engine, xystep=5)
@@ -134,8 +147,12 @@ def test_AxonMapSpatial(engine):
     npt.assert_equal(model.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_almost_equal(model.ret2dva(0), 0)
-    npt.assert_almost_equal(model.dva2ret(0), 0)
+    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
+    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    model2 = AxonMapSpatial(retinotopy=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+                     True)
 
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
@@ -148,10 +165,20 @@ def test_AxonMapSpatial(engine):
     npt.assert_almost_equal(percept.data, 0)
     npt.assert_equal(percept.time, None)
 
+    # Lambda cannot be too small:
+    with pytest.raises(ValueError):
+        AxonMapSpatial(axlambda=9).build()
+
     # Multiple frames are processed independently:
     model = AxonMapSpatial(engine=engine, rho=200, axlambda=100, xystep=5,
                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
+    # Axon map jax predict_percept not implemented yet
+    if engine == 'jax':
+        with pytest.raises(NotImplementedError):
+            percept = model.predict_percept(
+                ArgusII(stim={'A1': [1, 0], 'B3': [0, 2]}))
+        return
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
@@ -161,10 +188,6 @@ def test_AxonMapSpatial(engine):
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
     npt.assert_almost_equal(percept.time, [0, 1])
 
-    # Lambda cannot be too small:
-    with pytest.raises(ValueError):
-        AxonMapSpatial(axlambda=9).build()
-
 
 def test_AxonMapSpatial_plot():
     model = AxonMapSpatial()
@@ -172,6 +195,18 @@ def test_AxonMapSpatial_plot():
         ax = model.plot(use_dva=use_dva)
         npt.assert_equal(isinstance(ax, Subplot), True)
         npt.assert_equal(ax.get_xlim(), xlim)
+    # Simulated area might be larger than that:
+    model = AxonMapSpatial(xrange=(-20.5, 20.5), yrange=(-16.1, 16.1))
+    ax = model.plot(use_dva=True)
+    npt.assert_almost_equal(ax.get_xlim(), (-21, 21))
+    npt.assert_almost_equal(ax.get_ylim(), (-18, 18))
+    ax = model.plot(use_dva=False)
+    npt.assert_almost_equal(ax.get_xlim(), (-6000, 6000))
+    npt.assert_almost_equal(ax.get_ylim(), (-5000, 5000))
+
+    # Figure size can be changed:
+    ax = model.plot(figsize=(8, 7))
+    npt.assert_almost_equal(ax.figure.get_size_inches(), (8, 7))
 
     # Quadrants can be annotated:
     for ann_q, n_q in [(True, 6), (False, 0)]:
@@ -183,7 +218,7 @@ def test_AxonMapSpatial_plot():
         plt.close(fig)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
@@ -201,6 +236,14 @@ def test_AxonMapModel(engine):
     model.build(**set_params)
     for key, value in set_params.items():
         npt.assert_equal(getattr(model.spatial, key), value)
+
+    # Converting ret <=> dva
+    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
+    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    model2 = AxonMapModel(retinotopy=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+                     True)
 
     # Zeros in, zeros out:
     implant = ArgusII(stim=np.zeros(60))
@@ -222,10 +265,10 @@ def test_AxonMapModel(engine):
         AxonMapModel(axlambda=9).build()
 
 
-@pytest.mark.parametrize('eye', ('LE', 'RE'))
-@pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
-@pytest.mark.parametrize('sign', (-1.0, 1.0))
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('eye', ('LE', 'RE'))
+@ pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
+@ pytest.mark.parametrize('sign', (-1.0, 1.0))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
@@ -280,7 +323,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
         npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel_grow_axon_bundles(engine):
     for n_axons in [1, 2, 3, 5, 10]:
         model = AxonMapModel(xystep=2, engine=engine, n_axons=n_axons,
@@ -290,7 +333,7 @@ def test_AxonMapModel_grow_axon_bundles(engine):
         npt.assert_equal(len(bundles), n_axons)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel_find_closest_axon(engine):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -322,7 +365,7 @@ def test_AxonMapModel_find_closest_axon(engine):
     npt.assert_equal(closest_idx, 0)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel_calc_axon_sensitivity(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -332,18 +375,32 @@ def test_AxonMapModel_calc_axon_sensitivity(engine):
                              model.spatial.grid.yret.ravel()))
     bundles = model.spatial.grow_axon_bundles()
     axons = model.spatial.find_closest_axon(bundles)
-    contrib = model.spatial.calc_axon_sensitivity(axons)
+    # Need two separate contribs, one to get cut off axons from, and another
+    # to actually test against (with/without padding)
+    contrib = model.spatial.calc_axon_sensitivity(axons, pad=False)
+    pad = engine == 'jax'
+    axon_contrib = model.spatial.calc_axon_sensitivity(axons, pad=pad)
 
     # Check lambda math:
-    for ax, xy in zip(contrib, xyret):
+    max_axon_length = max([len(ax) for ax in contrib])
+    for ax, xy, model_ax in zip(contrib, xyret, axon_contrib):
         axon = np.insert(ax, 0, list(xy) + [0], axis=0)
         d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
                                np.diff(axon[:, 1], axis=0) ** 2))**2
-        sensitivity = np.exp(-d2 / (2.0 * model.spatial.axlambda ** 2))
-        npt.assert_almost_equal(sensitivity, ax[:, 2])
+        max_d2 = -2.0 * model.axlambda ** 2 * np.log(model.min_ax_sensitivity)
+        idx_d2 = d2 < max_d2
+        sensitivity = np.exp(-d2[idx_d2] / (2.0 * model.spatial.axlambda ** 2))
+        # Axons need to be padded for jax
+        if engine == 'jax':
+            s = np.zeros((max_axon_length))
+            s[:len(sensitivity)] = sensitivity
+            if len(sensitivity) > 0:
+                s[len(sensitivity):] = sensitivity[-1]
+            sensitivity = s.astype(np.float32)
+        npt.assert_almost_equal(sensitivity, model_ax[:, 2])
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel_calc_bundle_tangent(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -352,14 +409,14 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 0), 0.4819,
                             decimal=3)
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 1000),
-                            -0.5532, decimal=3)
+                            -0.5514, decimal=3)
     with pytest.raises(TypeError):
         model.spatial.calc_bundle_tangent([0], 1000)
     with pytest.raises(TypeError):
         model.spatial.calc_bundle_tangent(0, [1000])
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel_predict_percept(engine):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
@@ -369,14 +426,19 @@ def test_AxonMapModel_predict_percept(engine):
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
+    # Axon map jax predict_percept not implemented yet
+    if engine == 'jax':
+        with pytest.raises(NotImplementedError):
+            percept = model.predict_percept(ArgusII(stim=img_stim))
+        return
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
     npt.assert_equal(np.sum(percept.data > 0.8), 1)
     npt.assert_equal(np.sum(percept.data > 0.6), 2)
     npt.assert_equal(np.sum(percept.data > 0.1), 7)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 32)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 31)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept.data), 3.31321, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 3.3087, decimal=3)
     # Brightest pixel is in lower right:
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
     # Top half is empty:

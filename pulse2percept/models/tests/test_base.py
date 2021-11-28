@@ -8,7 +8,7 @@ from pulse2percept.stimuli import Stimulus
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, Model, NotBuiltError,
                                   SpatialModel, TemporalModel)
-from pulse2percept.utils import FreezeError, Grid2D
+from pulse2percept.utils import FreezeError, Grid2D, Watson2014Map
 
 
 class ValidBaseModel(BaseModel):
@@ -50,11 +50,10 @@ def test_BaseModel():
 
 class ValidSpatialModel(SpatialModel):
 
-    def dva2ret(self, dva):
-        return dva
-
-    def ret2dva(self, ret):
-        return ret
+    def get_default_params(self):
+        params = super(ValidSpatialModel, self).get_default_params()
+        params.update({'retinotopy': Watson2014Map()})
+        return params
 
     def _predict_spatial(self, earray, stim):
         if not self.is_built:
@@ -109,6 +108,23 @@ def test_SpatialModel():
     with pytest.raises(TypeError):
         # must pass an implant
         ValidSpatialModel().build().predict_percept(Stimulus(3))
+
+
+def test_SpatialModel_plot():
+    model = ValidSpatialModel()
+    model.build()
+    # Simulated area might be larger than that:
+    model = ValidSpatialModel(xrange=(-20.5, 20.5), yrange=(-16.1, 16.1))
+    model.build()
+    ax = model.plot(use_dva=True)
+    npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
+    ax = model.plot(use_dva=False)
+    npt.assert_almost_equal(ax.get_xlim(), (-6122.87, 6122.87), decimal=2)
+    npt.assert_almost_equal(ax.get_ylim(), (-4808.7, 4808.7), decimal=2)
+
+    # Figure size can be changed:
+    ax = model.plot(figsize=(8, 7))
+    npt.assert_almost_equal(ax.figure.get_size_inches(), (8, 7))
 
 
 class ValidTemporalModel(TemporalModel):
