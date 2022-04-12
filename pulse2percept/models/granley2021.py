@@ -107,7 +107,7 @@ class DefaultSizeModel(BaseModel):
         (a0*pdur + a1)^-1.
     a5, a6 : float, optional
         Linear regression coefficients for size vs amplitude (Eq 5)
-        F_size = a5*scaled_amp + a6 
+        F_size = a5*scaled_amp + a6 + a10 * freq
     """
 
     def __init__(self, rho, engine="serial", **params):
@@ -122,6 +122,7 @@ class DefaultSizeModel(BaseModel):
             'a1': 0.054326,
             'a5': 1.0812,
             'a6': -0.35338,
+            'a10' : 0,
             # dont let rho be scaled below this threshold
             'min_rho': 10,
         }
@@ -141,7 +142,7 @@ class DefaultSizeModel(BaseModel):
         Must support batching (freq, amp, pdur may be arrays)
         """
         min_f_size = self.min_rho**2 / self.rho**2
-        F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
+        F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6 + self.a10*freq
         if self.engine == 'jax':
             return jnp.maximum(F_size, min_f_size)
         else:
