@@ -48,8 +48,15 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
     # Scatter plot the data:
     if ax is None:
         ax = plt.gca()
-    ax.scatter(x, y, marker=marker, s=marker_size, c=color, edgecolors='w',
-               alpha=marker_alpha)
+    if isinstance(marker, list):
+        if not isinstance(color, list):
+            color = [color] * len(x)
+        for pointx, pointy, m, c in zip(x, y, marker, color):
+            ax.scatter(pointx, pointy, marker=m, s=marker_size, c=c, edgecolors='w',
+                alpha=marker_alpha)
+    else:
+        ax.scatter(x, y, marker=marker, s=marker_size, c=color, edgecolors='w',
+                alpha=marker_alpha)
     # Fit the regression curve:
     slope, intercept, rval, pval, _ = spst.linregress(x, y)
     def fit(x): return slope * x + intercept
