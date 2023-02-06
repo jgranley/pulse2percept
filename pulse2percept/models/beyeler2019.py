@@ -293,11 +293,14 @@ class AxonMapSpatial(SpatialModel):
             # You can force a build by ignoring pickles:
             'ignore_pickle': False,
             # Use the Watson transform for dva <=> ret:
-            'retinotopy': Watson2014Map()
+            'retinotopy': Watson2014Map(),
+            # HILO 
+            'beta_sup' : -1.9,
+            'beta_inf' : 0.5
         }
         return {**base_params, **params}
 
-    def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
+    def _jansonius2009(self, phi0, beta_sup=None, beta_inf=None, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
 
         This function generates the trajectory of a single nerve fiber bundle
@@ -329,6 +332,10 @@ class AxonMapSpatial(SpatialModel):
         The study did not include axons with phi0 in [-60, 60] deg.
 
         """
+        if beta_inf is None:
+            beta_inf = self.beta_inf
+        if beta_sup is None:
+            beta_sup = self.beta_sup
         # Check for the location of the optic disc:
         loc_od = self.loc_od
         if eye.upper() not in ['LE', 'RE']:
