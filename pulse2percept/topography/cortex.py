@@ -253,3 +253,49 @@ class Polimeni2006Map(CorticalMap):
         thetav3 -= np.sign(y) * (np.pi - phi1 - phi2)
         theta = thetav3 / self.alpha3
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+    
+
+class DiscretePointMap(CorticalMap):
+    """
+    A retinotopy described by a set of point mappings between dva 
+    and cortex (v1/v2/v3). If using interpolation, the set of points used 
+    for the mapping MUST be from a regularly spaced grid in DVA, as specified
+    by `xrange`, `yrange`, and `xystep`. 
+    interpolation.
+    Parameters:
+        -----------
+        cortical_coords : {region : (2, n_points) shaped array
+            Describes the cortical location for each point on the xy grid
+            for each simulated cortical region.
+
+            If using strategy='linear' or 'nearest', it is assumed these correspond to
+            the points in xrange/yrange/xystep grid (sorted low->high, 
+            first by y, then by x)
+
+        dva_coords : (2, n_points) shaped array. 
+            Visual field location for each of the simulated points. Note that in order
+            to support interpolation (strategy='linear' or strategy='nearest'), this 
+            MUST be an evenly spaced grid. 
+
+        strategy : str
+            The mapping strategy to use. 
+            Extrapolating the mapping beyond the specified range is not supported and 
+            will potentially result in undefined behavior depending on strategy
+            Options are:
+                'original' : only use the direct mapped points supplied (no interpolation, default)
+                'linear' : linear interpolation with scipy
+                'nearest' : nearest neighbor interpolation with scipy
+                
+    """
+    def __init__(self, cortical_coords, **params):
+        super().__init__(**params)
+        self.mappings = self.fit_mappings(cortical_coords, self.regions, self.strategy)
+
+    def get_default_params(self):
+        base_params = super().get_default_params()
+        params = {
+            'regions' : ['v1'],
+            'dva_coords' : 
+            'strategy' : 'original',
+        }
+        return {**base_params, **params}
