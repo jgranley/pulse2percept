@@ -10,6 +10,7 @@
     nanduri2012
     beyeler2019
     granley2021
+    granley2023
 
 .. seealso::
 
@@ -25,20 +26,24 @@ from .horsager2009 import Horsager2009Model, Horsager2009Temporal
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
                           Nanduri2012Temporal)
 from .granley2021 import BiphasicAxonMapModel, BiphasicAxonMapSpatial
+from .granley2023 import MVGSpatial, MVGModel
 from .thompson2003 import Thompson2003Model, Thompson2003Spatial
 
 __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
     'BaseModel',
+    'BiphasicAxonMapSpatial',
+    'BiphasicAxonMapModel',
     'FadingTemporal',
     'Horsager2009Model',
     'Horsager2009Temporal',
     'Model',
+    'MVGSpatial',
+    'MVGModel',
     'Nanduri2012Model',
     'Nanduri2012Spatial',
     'Nanduri2012Temporal',
-    'BiphasicAxonMapModel',
     'NotBuiltError',
     'ScoreboardModel',
     'ScoreboardSpatial',
