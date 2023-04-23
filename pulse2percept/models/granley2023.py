@@ -91,16 +91,35 @@ class MVGSpatial(AxonMapSpatial):
     def __init__(self, **params):
         super(MVGSpatial, self).__init__(**params)
         self.bundles = []
+        self.thetas = None
 
     def get_default_params(self):
         base_params = super(MVGSpatial, self).get_default_params()
         params = {
             # Rho directly corresponds to area
             'rho' : 500, 
-            # Eta directly corresponds to eccentricity'
-            'eta' : 0.8,
+            # axlambda directly corresponds to eccentricity'
+            'axlambda' : 0.8,
             # Thresh_percept is important for this model
-            'thresh_percept' : 1/np.exp(1)**2 
+            'thresh_percept' : 1/np.exp(1)**2,
+            # Scale orientations from axon map model
+            # The best fit to data is 0.45. This makes the model
+            # look strange over fovea, so I left default as 1 
+            'orient_scale' : 1,
+            # Biphasic params (DO NOT MATCH GRANLEY2021)  
+            # amp v bright coefficient
+            'a0' : 0.4733,
+            # amp vs bright exp
+            'a1' : 0.5211,
+            # freq v bright
+            'a2' : 0.016,
+            # amp vs size
+            'a3' : 0.5,
+            # pdur vs ecc exp
+            'a4' : 0.0440,
+            #############
+            # For debuging
+            'return_thetas' : True
         }
         return {**base_params, **params}
 
@@ -108,6 +127,22 @@ class MVGSpatial(AxonMapSpatial):
         super(MVGSpatial, self)._build()
         self.bundles = self.grow_axon_bundles()
 
+
+    def _scale_amps(self, freq, amp, pdur):
+        """TODO.
+        """
+        return amp
+
+    def _bright(self, freq, amp, pdur):
+        amp = self._scale_amps(freq, amp, pdur)
+        return self.a0*amp**self.a1 + self.a2*freq
+
+    def _size(self, freq, amp, pdur):
+        amp = self._scale_amps(freq, amp, pdur)
+        return amp * self.a3
+
+    def _ecc(self, freq, amp, pdur):
+        return np.exp(pdur - 0.45) ** (-self.a4)
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -124,30 +159,33 @@ class MVGSpatial(AxonMapSpatial):
             try:
                 x.append(earray[e].x)
                 y.append(earray[e].y)
-                # amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
-                # if amp == 0:
-                #     continue
-                # freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
-                # pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
-                # elec_params.append([freq, amp, pdur])
+                amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
+                if amp == 0:
+                    continue
+                freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
+                pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
+                elec_params.append([freq, amp, pdur])
                 
             except KeyError:
-                # raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
-                #                 f"delay dur")
-                continue
+                raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
+                                f"delay dur")
         elec_params = np.array(elec_params, dtype=np.float32)
         ex = np.array(x, dtype=np.float32)
         ey = np.array(y, dtype=np.float32)
 
         # Actual prediction #
-        sy = np.sqrt(self.rho / (-2*np.pi*np.log(self.thresh_percept)*np.sqrt(1 - self.eta**2)))
-        sx = np.sqrt(self.rho * np.sqrt(1 - self.eta**2) / (-2*np.pi*np.log(self.thresh_percept)))
+        
         shape = np.array(self.grid.x.shape)
         out = np.zeros(shape, dtype='float32')
         thetas = self.calc_bundle_tangent_fast(ex, ey, bundles=self.bundles) - np.pi/2
-        for x, y, theta in zip(ex, ey, thetas):
-            if theta < -np.pi/2:
-                theta += np.pi 
+        thetas = np.where(thetas < -np.pi/2, thetas + np.pi, thetas)
+        thetas = thetas * self.orient_scale
+        for x, y, theta, (freq, amp, pdur) in zip(ex, ey, thetas, elec_params):
+            rho_prime = self.rho * self._size(freq, amp, pdur)
+            axlambda_prime = self.axlambda * self._ecc(freq, amp, pdur)
+            bright = self._bright(freq, amp, pdur)
+            sy = np.sqrt(rho_prime / (-2*np.pi*np.log(self.thresh_percept)*np.sqrt(1 - axlambda_prime**2)))
+            sx = np.sqrt(rho_prime * np.sqrt(1 - axlambda_prime**2) / (-2*np.pi*np.log(self.thresh_percept)))
             R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
             exp = 2
             eig = np.array([[sx**exp, 0], [0, sy**exp]])
@@ -160,7 +198,9 @@ class MVGSpatial(AxonMapSpatial):
             norm = multivariate_normal(mean=center_pixel, cov=cov, allow_singular=True) # centered for now
             def generator_fn(ys, xs, offset=(0, 0)):
                 return norm.pdf(np.stack([xs - offset[0], ys-offset[1]], axis=-1)) * 2*np.pi * np.sqrt(np.linalg.det(cov))
-            out += np.fromfunction(generator_fn, shape, offset=(0, 0))
+            out += bright * np.fromfunction(generator_fn, shape, offset=(0, 0))
+        if self.return_thetas:
+            self.thetas = thetas
         return np.flipud(out)
             
 
