@@ -695,7 +695,7 @@ class AxonMapSpatial(SpatialModel):
         # Confine to (-pi/2, pi/2):
         tangent = np.where(tangent < -np.pi/2, tangent+np.pi, tangent)
         tangent = np.where(tangent > np.pi/2, tangent - np.pi, tangent)
-        return tangent
+        return tangent.reshape(xc.shape)
 
 
     def _correct_loc_od(self):

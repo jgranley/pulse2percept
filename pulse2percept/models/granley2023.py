@@ -97,9 +97,9 @@ class MVGSpatial(AxonMapSpatial):
         base_params = super(MVGSpatial, self).get_default_params()
         params = {
             # Rho directly corresponds to area
-            'rho' : 500, 
-            # axlambda directly corresponds to eccentricity'
-            'axlambda' : 0.8,
+            'rho' : 150, 
+            # lam directly corresponds to eccentricity'
+            'lam' : 0.85,
             # Thresh_percept is important for this model
             'thresh_percept' : 1/np.exp(1)**2,
             # Scale orientations from axon map model
@@ -125,7 +125,7 @@ class MVGSpatial(AxonMapSpatial):
 
     def _build(self):
         super(MVGSpatial, self)._build()
-        self.bundles = self.grow_axon_bundles()
+        self.bundles = self.grow_axon_bundles(prune=True)
 
 
     def _scale_amps(self, freq, amp, pdur):
@@ -182,10 +182,10 @@ class MVGSpatial(AxonMapSpatial):
         thetas = thetas * self.orient_scale
         for x, y, theta, (freq, amp, pdur) in zip(ex, ey, thetas, elec_params):
             rho_prime = self.rho * self._size(freq, amp, pdur)
-            axlambda_prime = self.axlambda * self._ecc(freq, amp, pdur)
+            lam_prime = self.lam * self._ecc(freq, amp, pdur)
             bright = self._bright(freq, amp, pdur)
-            sy = np.sqrt(rho_prime / (-2*np.pi*np.log(self.thresh_percept)*np.sqrt(1 - axlambda_prime**2)))
-            sx = np.sqrt(rho_prime * np.sqrt(1 - axlambda_prime**2) / (-2*np.pi*np.log(self.thresh_percept)))
+            sy = np.sqrt(rho_prime / (-2*np.pi*np.log(self.thresh_percept)*np.sqrt(1 - lam_prime**2)))
+            sx = np.sqrt(rho_prime * np.sqrt(1 - lam_prime**2) / (-2*np.pi*np.log(self.thresh_percept)))
             R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
             exp = 2
             eig = np.array([[sx**exp, 0], [0, sy**exp]])
