@@ -117,6 +117,7 @@ class MVGSpatial(AxonMapSpatial):
             'a3' : 0.5,
             # pdur vs ecc exp
             'a4' : 0.0440,
+            'amp_cutoff' : 0.25,
             #############
             # For debuging
             'return_thetas' : True
@@ -135,14 +136,14 @@ class MVGSpatial(AxonMapSpatial):
 
     def _bright(self, freq, amp, pdur):
         amp = self._scale_amps(freq, amp, pdur)
-        return self.a0*amp**self.a1 + self.a2*freq
+        return np.where(amp > self.amp_cutoff, self.a0 * np.maximum(amp, 1e-5) ** self.a1 + self.a2 * freq, 0.)
 
     def _size(self, freq, amp, pdur):
         amp = self._scale_amps(freq, amp, pdur)
         return amp * self.a3
 
     def _ecc(self, freq, amp, pdur):
-        return np.exp(pdur - 0.45) ** (-self.a4)
+        return np.exp((-self.a4)*(pdur - 0.45)) 
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -157,13 +158,13 @@ class MVGSpatial(AxonMapSpatial):
         y = []
         for e in stim.electrodes:
             try:
-                x.append(earray[e].x)
-                y.append(earray[e].y)
                 amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
                 if amp == 0:
                     continue
                 freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
                 pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
+                x.append(earray[e].x)
+                y.append(earray[e].y)
                 elec_params.append([freq, amp, pdur])
                 
             except KeyError:
@@ -172,7 +173,6 @@ class MVGSpatial(AxonMapSpatial):
         elec_params = np.array(elec_params, dtype=np.float32)
         ex = np.array(x, dtype=np.float32)
         ey = np.array(y, dtype=np.float32)
-
         # Actual prediction #
         
         shape = np.array(self.grid.x.shape)
@@ -181,8 +181,8 @@ class MVGSpatial(AxonMapSpatial):
         thetas = np.where(thetas < -np.pi/2, thetas + np.pi, thetas)
         thetas = thetas * self.orient_scale
         for x, y, theta, (freq, amp, pdur) in zip(ex, ey, thetas, elec_params):
-            rho_prime = self.rho * self._size(freq, amp, pdur)
-            lam_prime = self.lam * self._ecc(freq, amp, pdur)
+            rho_prime = np.maximum(self.rho * self._size(freq, amp, pdur), 1)
+            lam_prime = np.clip(self.lam * self._ecc(freq, amp, pdur), 0, 0.9999)
             bright = self._bright(freq, amp, pdur)
             sy = np.sqrt(rho_prime / (-2*np.pi*np.log(self.thresh_percept)*np.sqrt(1 - lam_prime**2)))
             sx = np.sqrt(rho_prime * np.sqrt(1 - lam_prime**2) / (-2*np.pi*np.log(self.thresh_percept)))
@@ -201,6 +201,7 @@ class MVGSpatial(AxonMapSpatial):
             out += bright * np.fromfunction(generator_fn, shape, offset=(0, 0))
         if self.return_thetas:
             self.thetas = thetas
+        # out[out<self.thresh_percept] = 0
         return np.flipud(out)
             
 
