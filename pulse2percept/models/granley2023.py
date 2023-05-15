@@ -116,7 +116,7 @@ class MVGSpatial(AxonMapSpatial):
             # amp vs size
             'a3' : 0.5,
             # pdur vs ecc exp
-            'a4' : 0.0440,
+            'a4' : -0.2122,
             'amp_cutoff' : 0.25,
             #############
             # For debuging
@@ -143,7 +143,7 @@ class MVGSpatial(AxonMapSpatial):
         return amp * self.a3
 
     def _ecc(self, freq, amp, pdur):
-        return np.exp((-self.a4)*(pdur - 0.45)) 
+        return 0.45**(-self.a4) * pdur**self.a4 
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -182,7 +182,7 @@ class MVGSpatial(AxonMapSpatial):
         thetas = thetas * self.orient_scale
         for x, y, theta, (freq, amp, pdur) in zip(ex, ey, thetas, elec_params):
             rho_prime = np.maximum(self.rho * self._size(freq, amp, pdur), 1)
-            lam_prime = np.clip(self.lam * self._ecc(freq, amp, pdur), 0, 0.9999)
+            lam_prime = np.clip(self.lam * self._ecc(freq, amp, pdur), 0, 0.99)
             bright = self._bright(freq, amp, pdur)
             sy = np.sqrt(rho_prime / (-2*np.pi*np.log(self.thresh_percept)*np.sqrt(1 - lam_prime**2)))
             sx = np.sqrt(rho_prime * np.sqrt(1 - lam_prime**2) / (-2*np.pi*np.log(self.thresh_percept)))

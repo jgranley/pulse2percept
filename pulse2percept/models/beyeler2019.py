@@ -293,7 +293,7 @@ class AxonMapSpatial(SpatialModel):
             # You can force a build by ignoring pickles:
             'ignore_pickle': False,
             # Use the Watson transform for dva <=> ret:
-            'retinotopy': Watson2014Map()
+            'retinotopy': Watson2014Map(),
             'beta_sup':-1.9, 
             'beta_inf':0.5
         }
@@ -688,12 +688,12 @@ class AxonMapSpatial(SpatialModel):
         # Find index of closest segment
         _, closest_seg = kdtree.query(query)
         segs = axon_idx[closest_seg]
-        prev_segs = axon_idx[closest_seg - 1]
-        next_segs = axon_idx[closest_seg + 1]
+        prev_segs = axon_idx[np.where(closest_seg > 0, closest_seg, 1) - 1]
+        next_segs = axon_idx[np.where(closest_seg < len(axon_idx)-2, closest_seg, len(axon_idx)-2) + 1]
 
         offset_l = np.where(prev_segs == segs, -1, 0)
         offset_r = np.where(next_segs == segs, 1, 0)
-        dx = flat_bundles[closest_seg + offset_r] - flat_bundles[closest_seg + offset_l]
+        dx = flat_bundles[np.minimum(closest_seg + offset_r, len(flat_bundles)-1)] - flat_bundles[np.maximum(closest_seg + offset_l, 0)]
 
         dx[:, 1] *= -1
         tangent = np.arctan2(dx[:, 1], dx[:, 0])
@@ -1016,3 +1016,39 @@ class AxonMapModel(Model):
                                  f"built for {self.spatial.eye}.")
         return super(AxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)
+
+
+
+    @staticmethod
+    def Compute_perceptual_model(rho = 200, axlambda= 400, x = 0, y = 0, z = 0, rot = 0, eye = 'RE', xrange = (-18, 16), yrange = (-11, 11), xystep = 0.5, n_ax_segments=300, n_axons=200, beta_sup=-1.9, beta_inf=0.5, ignore_pickle = True, implant_name= 'Argus II'):   
+        
+        from pulse2percept.implants import ArgusII, PRIMA
+        if implant_name == 'Argus II':
+            implant = ArgusII( x=x, y=y, z=z, rot=rot, eye=eye)   
+        
+            implant.stim={'A8': 30}
+            nelectrodes = 60
+            
+            
+        model = AxonMapSpatial(ax_segments_range=(3, 50), axlambda=axlambda, 
+                        axon_pickle='axons.pickle', 
+                        axons_range=(-180, 180), engine='serial', 
+                        eye='RE', grid_type='rectangular', 
+                        ignore_pickle=ignore_pickle, n_ax_segments=n_ax_segments, 
+                        n_axons=n_axons, n_jobs=1, rho=rho, 
+                        scheduler='threading', thresh_percept=0, 
+                        verbose=True, xrange=xrange, xystep=xystep, 
+                        yrange=yrange,beta_sup=beta_sup, beta_inf=beta_inf)
+        model.build()
+        
+        percept = model.predict_percept(implant)
+        
+        perceptual_model = np.zeros((percept.shape[0], percept.shape[1], nelectrodes))
+        k=0
+        for name, electrode in implant.electrodes.items():
+            implant.stim={name: 30}
+            percept = model.predict_percept(implant)
+            perceptual_model[:,:,k] = percept.data.squeeze()
+            k=k+1
+        
+        return perceptual_model
