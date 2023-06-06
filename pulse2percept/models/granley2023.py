@@ -1,4 +1,4 @@
-"""`BiphasicAxonMapModel`"""
+"""`MVGModel`"""
 import numpy as np
 import sys
 from scipy.stats import multivariate_normal
