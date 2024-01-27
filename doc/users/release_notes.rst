@@ -4,7 +4,7 @@
 Release Notes
 =============
 
-v0.9.0 (TBD)
+v0.10.0 (TBD)
 ------------
 
 Highlights
@@ -24,6 +24,54 @@ Deprecations
 
 Bug fixes
 ~~~~~~~~~
+
+
+
+v0.9.0 (TBD)
+------------
+
+Highlights
+~~~~~~~~~~
+Introduces cortical models, implants, topography, and neuropythy integration.
+
+New features
+~~~~~~~~~~~~
+See `this pull request <https://github.com/pulse2percept/pulse2percept/pull/553>`_ for a full list of PR's and features.
+
+New `implants.cortex` module: 
+
+* :py:class:`~pulse2percept.implants.cortex.Orion` (:pull:`524`)
+* :py:class:`~pulse2percept.implants.cortex.Cortivis` (:pull:`525`)
+* :py:class:`~pulse2percept.implants.cortex.ICVP` (:pull:`542`)
+* :py:class:`~pulse2percept.implants.cortex.Neuralink`, :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`, 
+      :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`, :py:class:`~pulse2percept.implants.cortex.EllipsoidElectrode` (:pull:`601`)
+
+New `topography` module:
+
+* Add cortical visual field maps: :py:class:`~pulse2percept.topography.CorticalMap`, :py:class:`~pulse2percept.topography.Polimeni2006Map` (:pull:`531`),
+* MRI based visual field mapping based on neuropythy [Benson2018]_ :py:class:`~pulse2percept.topography.NeuropythyMap` (:pull:`601`)
+
+New `models.cortex` module:
+
+* Add basic ScoreboardModel to model symmetric radial current spread :py:class:`~pulse2percept.models.cortex.ScoreboardModel` (:pull:`533`)
+* Add DynaphosModel [Grinten2023]_ :py:class:`~pulse2percept.models.cortex.DynaphosModel` (:pull:`547`), based on `https://github.com/neuralcodinglab/dynaphos`_
+
+Miscellaneous:
+
+* Support python 3.11, drop support for python 3.7
+* Misc bug fixes and improvements
+
+
+
+API changes
+~~~~~~~~~~~
+Many, see `this pull request <https://github.com/pulse2percept/pulse2percept/pull/553>`_
+
+Backward-incompatible changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* `model.retinotopy` has been refactored to `model.vfmap`
+
 
 
 v0.8.0 (2022-05-05)
