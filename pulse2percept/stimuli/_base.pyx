@@ -1,11 +1,12 @@
 # distutils: language = c++
 # ^ needed for bool
 
+cimport numpy as cnp
+cnp.import_array()
 from pulse2percept.utils._fast_math cimport c_isclose, float32
 from libc.math cimport(fabs as c_abs, fmax as c_max)
 from libcpp cimport bool
 import numpy as np
-cimport numpy as cnp
 
 
 cpdef bool[::1] fast_compress_space(float32[:, ::1] data):

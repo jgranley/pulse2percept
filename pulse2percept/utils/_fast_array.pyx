@@ -1,5 +1,6 @@
-import numpy as np
 cimport numpy as cnp
+cnp.import_array()
+import numpy as np
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
